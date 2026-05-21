@@ -1,0 +1,60 @@
+.gutenbot-upload-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 24px;
+    max-width: 700px;
+    margin-top: 16px;
+}
+
+.gutenbot-drop-zone {
+    border: 2px dashed #2271b1;
+    border-radius: 4px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 16px;
+    background: #f6f7f7;
+    transition: background 0.2s;
+}
+
+.gutenbot-drop-zone.dragover {
+    background: #e8f0fe;
+}
+
+.gutenbot-drop-zone p {
+    color: #2271b1;
+    margin: 0 0 12px;
+    font-size: 14px;
+}
+
+.gutenbot-drop-zone input[type="file"] {
+    display: none;
+}
+
+.gutenbot-file-list {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+}
+
+.gutenbot-file-list li {
+    padding: 4px 0;
+    font-size: 13px;
+    color: #1d2327;
+}
+
+/* Status badges */
+.gutenbot-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.gutenbot-status--uploaded      { background: #ddd; color: #444; }
+.gutenbot-status--processing    { background: #fff3cd; color: #856404; }
+.gutenbot-status--draft_created { background: #d1e7dd; color: #0f5132; }
+.gutenbot-status--failed        { background: #f8d7da; color: #842029; }
