@@ -13,12 +13,14 @@ class GutenBot_Page_Generator {
         'columns' => '<!-- wp:columns --><div class="wp-block-columns"><!-- wp:column --><div class="wp-block-column"><!-- wp:paragraph --><p>%s</p><!-- /wp:paragraph --></div><!-- /wp:column --><!-- wp:column --><div class="wp-block-column"><!-- wp:paragraph --><p>Column 2</p><!-- /wp:paragraph --></div><!-- /wp:column --></div><!-- /wp:columns -->',
     ];
 
-    public static function build(array $plan, array $reusable_sections) {
+    public static function build(array $plan, array $reusable_sections, bool $skip_title_check = false) {
         $title         = $plan['title'];
         $sections      = $plan['sections'];
         $layout_source = $plan['layout_source'] ?? null;
 
-        self::assert_unique_title($title);
+        if (!$skip_title_check) {
+            self::assert_unique_title($title);
+        }
 
         $markup_parts = [];
 

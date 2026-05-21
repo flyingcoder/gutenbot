@@ -92,6 +92,15 @@ class GutenBot_Activator {
         if (!get_option('gutenbot_ai_model')) {
             update_option('gutenbot_ai_model', 'claude-sonnet-4-6');
         }
+        if (!get_option('gutenbot_ai_provider')) {
+            update_option('gutenbot_ai_provider', 'anthropic');
+        }
+        if (!get_option('gutenbot_ollama_endpoint')) {
+            update_option('gutenbot_ollama_endpoint', 'http://ollama:11434/api/chat');
+        }
+        if (!get_option('gutenbot_ollama_model')) {
+            update_option('gutenbot_ollama_model', 'llama3.2');
+        }
 
         update_option('gutenbot_db_version', GUTENBOT_VERSION);
     }

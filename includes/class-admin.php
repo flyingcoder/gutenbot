@@ -51,6 +51,22 @@ class GutenBot_Admin {
         );
     }
 
+    public static function enqueue_editor_assets() {
+        wp_enqueue_script(
+            'gutenbot-editor',
+            GUTENBOT_PLUGIN_URL . 'assets/editor.js',
+            ['wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components',
+             'wp-data', 'wp-api-fetch', 'wp-blocks', 'wp-i18n'],
+            GUTENBOT_VERSION,
+            true
+        );
+        wp_localize_script('gutenbot-editor', 'gutenbotEditor', [
+            'apiPath'     => '/gutenbot/v1/generate',
+            'ajaxUrl'     => admin_url('admin-ajax.php'),
+            'streamNonce' => wp_create_nonce('gutenbot_stream'),
+        ]);
+    }
+
     public static function enqueue_assets($hook) {
         if (strpos($hook, 'gutenbot') === false) {
             return;
@@ -173,6 +189,53 @@ class GutenBot_Admin {
         exit;
     }
 
+    public static function handle_add_rule() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions.', 'gutenbot'));
+        }
+        check_admin_referer('gutenbot_add_rule', 'gutenbot_nonce');
+
+        $key   = sanitize_text_field($_POST['rule_key'] ?? '');
+        $value = sanitize_textarea_field($_POST['rule_value'] ?? '');
+
+        if ($key !== '' && $value !== '') {
+            global $wpdb;
+            $wpdb->replace(
+                "{$wpdb->prefix}gutenbot_rules",
+                [
+                    'rule_key'   => $key,
+                    'rule_value' => $value,
+                    'created_at' => current_time('mysql'),
+                ]
+            );
+        }
+
+        wp_redirect(add_query_arg(
+            'gutenbot_notice', 'rule_saved',
+            admin_url('admin.php?page=gutenbot-settings')
+        ));
+        exit;
+    }
+
+    public static function handle_delete_rule() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions.', 'gutenbot'));
+        }
+        check_admin_referer('gutenbot_delete_rule', 'gutenbot_nonce');
+
+        $rule_id = (int) ($_POST['rule_id'] ?? 0);
+        if ($rule_id > 0) {
+            global $wpdb;
+            $wpdb->delete("{$wpdb->prefix}gutenbot_rules", ['id' => $rule_id], ['%d']);
+        }
+
+        wp_redirect(add_query_arg(
+            'gutenbot_notice', 'rule_deleted',
+            admin_url('admin.php?page=gutenbot-settings')
+        ));
+        exit;
+    }
+
     public static function handle_process_job() {
         if (!current_user_can('manage_options')) {
             wp_die(__('Insufficient permissions.', 'gutenbot'));
@@ -213,7 +276,8 @@ class GutenBot_Admin {
             $plan     = $ai->get_page_plan($text, $similar, [], $rules);
 
             if (!$plan) {
-                throw new RuntimeException('AI did not return a valid page plan.');
+                $reason = $ai->get_last_error() ?: 'AI did not return a valid page plan.';
+                throw new RuntimeException($reason);
             }
 
             $sections = [];

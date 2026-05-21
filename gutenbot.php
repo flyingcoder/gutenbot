@@ -20,6 +20,8 @@ require_once GUTENBOT_PLUGIN_DIR . 'includes/class-document-processor.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-ai-client.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-page-generator.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-admin.php';
+require_once GUTENBOT_PLUGIN_DIR . 'includes/class-rest-api.php';
+require_once GUTENBOT_PLUGIN_DIR . 'includes/class-stream-controller.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-hooks.php';
 
 register_activation_hook(__FILE__, ['GutenBot_Activator', 'activate']);

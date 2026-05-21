@@ -10,6 +10,12 @@ class GutenBot_Hooks {
         add_action('admin_post_gutenbot_upload', ['GutenBot_Admin', 'handle_upload']);
         add_action('admin_post_gutenbot_reindex', ['GutenBot_Admin', 'handle_reindex']);
         add_action('admin_post_gutenbot_process_job', ['GutenBot_Admin', 'handle_process_job']);
+        add_action('admin_post_gutenbot_add_rule', ['GutenBot_Admin', 'handle_add_rule']);
+        add_action('admin_post_gutenbot_delete_rule', ['GutenBot_Admin', 'handle_delete_rule']);
+
+        add_action('rest_api_init',               ['GutenBot_REST_API', 'register_routes']);
+        add_action('enqueue_block_editor_assets', ['GutenBot_Admin',    'enqueue_editor_assets']);
+        add_action('wp_ajax_gutenbot_stream_generate', ['GutenBot_Stream_Controller', 'handle']);
 
         add_action('transition_post_status', [__CLASS__, 'reindex_on_publish'], 10, 3);
         add_action('save_post_page', [__CLASS__, 'reindex_on_save'], 10, 2);
