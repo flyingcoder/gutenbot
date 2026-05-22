@@ -16,6 +16,8 @@ class GutenBot_Activator {
                 template_slug VARCHAR(128) NOT NULL DEFAULT '',
                 block_structure LONGTEXT NOT NULL,
                 section_order TEXT NOT NULL,
+                ai_summary TEXT NOT NULL DEFAULT '',
+                content_hash VARCHAR(64) NOT NULL DEFAULT '',
                 indexed_at DATETIME NOT NULL,
                 PRIMARY KEY (id),
                 KEY post_id (post_id)
@@ -28,6 +30,8 @@ class GutenBot_Activator {
                 block_markup LONGTEXT NOT NULL,
                 css_classes TEXT NOT NULL DEFAULT '',
                 source_post_id BIGINT UNSIGNED NOT NULL,
+                embedding LONGTEXT NOT NULL DEFAULT '',
+                content_hash VARCHAR(64) NOT NULL DEFAULT '',
                 PRIMARY KEY (id),
                 KEY layout_id (layout_id),
                 KEY section_type (section_type)
@@ -66,6 +70,18 @@ class GutenBot_Activator {
                 PRIMARY KEY (id),
                 UNIQUE KEY rule_key (rule_key)
             ) $charset;",
+
+            "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}gutenbot_index_queue (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                post_id BIGINT UNSIGNED NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                error_msg TEXT DEFAULT NULL,
+                queued_at DATETIME NOT NULL,
+                processed_at DATETIME DEFAULT NULL,
+                PRIMARY KEY (id),
+                KEY post_id (post_id),
+                KEY status (status)
+            ) $charset;",
         ];
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -100,6 +116,24 @@ class GutenBot_Activator {
         }
         if (!get_option('gutenbot_ollama_model')) {
             update_option('gutenbot_ollama_model', 'llama3.2');
+        }
+        if (!get_option('gutenbot_ollama_embeddings_model')) {
+            update_option('gutenbot_ollama_embeddings_model', 'nomic-embed-text');
+        }
+        if (get_option('gutenbot_ai_indexing_enabled') === false) {
+            update_option('gutenbot_ai_indexing_enabled', '0');
+        }
+        if (get_option('gutenbot_index_run_id') === false) {
+            update_option('gutenbot_index_run_id', '');
+        }
+        if (!get_option('gutenbot_embeddings_endpoint')) {
+            update_option('gutenbot_embeddings_endpoint', 'https://api.openai.com/v1/embeddings');
+        }
+        if (!get_option('gutenbot_embeddings_model')) {
+            update_option('gutenbot_embeddings_model', 'text-embedding-3-small');
+        }
+        if (!get_option('gutenbot_embeddings_api_key')) {
+            update_option('gutenbot_embeddings_api_key', '');
         }
 
         update_option('gutenbot_db_version', GUTENBOT_VERSION);

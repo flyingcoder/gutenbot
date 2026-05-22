@@ -49,3 +49,53 @@
         return (bytes / 1048576).toFixed(1) + ' MB';
     }
 }(jQuery));
+
+(function ($) {
+    'use strict';
+
+    var cfg = window.gutenbotIndex;
+    if (!cfg || !cfg.runId) return;
+
+    var wrap  = document.getElementById('gutenbot-index-progress-wrap');
+    var bar   = document.getElementById('gutenbot-index-bar');
+    var label = document.getElementById('gutenbot-index-progress-label');
+    if (!wrap || !bar || !label) return;
+
+    wrap.style.display = '';
+
+    var failures = 0;
+
+    function poll() {
+        $.ajax({
+            url:    cfg.ajaxUrl,
+            method: 'POST',
+            data:   { action: 'gutenbot_index_progress', nonce: cfg.nonce },
+            success: function (res) {
+                failures = 0;
+                if (!res || !res.success) {
+                    setTimeout(poll, 3000);
+                    return;
+                }
+                var d = res.data;
+                bar.value = d.pct;
+                label.textContent = d.done + ' / ' + d.total + ' indexed (' + d.pct + '%)'
+                    + (d.failed ? ' — ' + d.failed + ' failed' : '');
+                if (d.running) {
+                    setTimeout(poll, 2000);
+                } else {
+                    label.textContent = 'Indexing complete. ' + d.done + ' of ' + d.total + ' items processed.'
+                        + (d.failed ? ' ' + d.failed + ' failed.' : '');
+                    setTimeout(function () { location.reload(); }, 2000);
+                }
+            },
+            error: function () {
+                failures++;
+                var delay = Math.min(failures * 3000, 15000);
+                label.textContent = 'Server unreachable, retrying… (attempt ' + failures + ')';
+                setTimeout(poll, delay);
+            }
+        });
+    }
+
+    poll();
+}(jQuery));

@@ -25,7 +25,7 @@ class GutenBot_REST_API {
                 'provider' => [
                     'required' => true,
                     'type'     => 'string',
-                    'enum'     => ['anthropic', 'ollama'],
+                    'enum'     => ['anthropic', 'ollama', 'embeddings'],
                 ],
             ],
         ]);
@@ -67,7 +67,13 @@ class GutenBot_REST_API {
 
     public static function test_connection(WP_REST_Request $request) {
         $provider = $request->get_param('provider');
-        return $provider === 'ollama' ? static::test_ollama() : static::test_anthropic();
+        if ($provider === 'ollama') {
+            return static::test_ollama();
+        }
+        if ($provider === 'embeddings') {
+            return static::test_embeddings();
+        }
+        return static::test_anthropic();
     }
 
     protected static function test_anthropic() {
@@ -144,6 +150,65 @@ class GutenBot_REST_API {
         }
 
         return rest_ensure_response(['ok' => true, 'message' => "Ollama model \"{$model}\" is working. Response: \"{$reply}\""]);
+    }
+
+    protected static function test_embeddings() {
+        $endpoint = get_option('gutenbot_embeddings_endpoint', 'https://api.openai.com/v1/embeddings');
+        $model    = get_option('gutenbot_embeddings_model', 'text-embedding-3-small');
+        $api_key  = get_option('gutenbot_embeddings_api_key', '') ?: (string) getenv('EMBEDDINGS_API_KEY');
+
+        $headers = ['content-type' => 'application/json'];
+        if ($api_key !== '') {
+            $headers['Authorization'] = 'Bearer ' . $api_key;
+        }
+
+        // Include both `input` (OpenAI / Ollama /api/embed) and `prompt` (Ollama /api/embeddings)
+        // so the request works regardless of which API variant the endpoint implements.
+        $response = wp_remote_post($endpoint, [
+            'headers' => $headers,
+            'body'    => wp_json_encode([
+                'model'  => $model,
+                'input'  => 'test',
+                'prompt' => 'test',
+            ]),
+            'timeout' => 15,
+        ]);
+
+        if (is_wp_error($response)) {
+            return new WP_Error('connection_failed', 'Could not reach embeddings endpoint: ' . $response->get_error_message(), ['status' => 502]);
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        if ($status === 401) {
+            $msg = $api_key !== ''
+                ? 'Embeddings API key is invalid or expired (HTTP 401). Update it under GutenBot › Settings.'
+                : 'This endpoint requires an API key (HTTP 401). Add it under GutenBot › Settings › Embeddings API Key.';
+            return new WP_Error('invalid_key', $msg, ['status' => 401]);
+        }
+        if ($status !== 200) {
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            $msg  = $body['error']['message'] ?? "Embeddings endpoint returned HTTP {$status}.";
+            return new WP_Error('api_error', $msg, ['status' => 502]);
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        // Resolve the vector from three common response shapes:
+        //   OpenAI / v1/embeddings:  data[0].embedding  (array of floats)
+        //   Ollama /api/embed:       embeddings[0]       (array of floats)
+        //   Ollama /api/embeddings:  embedding           (array of floats)
+        $vector = $data['data'][0]['embedding']
+            ?? $data['embeddings'][0]
+            ?? $data['embedding']
+            ?? null;
+
+        if (empty($vector) || !is_array($vector)) {
+            $raw = substr(wp_remote_retrieve_body($response), 0, 200);
+            return new WP_Error('empty_response', "Embeddings endpoint responded but returned no vector data. Response: {$raw}", ['status' => 502]);
+        }
+
+        $dims = count($vector);
+        return rest_ensure_response(['ok' => true, 'message' => "Connected to embeddings endpoint using model \"{$model}\" ({$dims}-dimensional vectors)."]);
     }
 
     // Protected so tests can subclass and override without touching WP/AI dependencies.

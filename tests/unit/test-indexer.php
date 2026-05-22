@@ -116,4 +116,20 @@ class Test_Indexer extends TestCase {
         // Assert
         $this->assertSame('general', $type);
     }
+
+    public function test_extract_plain_text_strips_tags_from_blocks() {
+        // Arrange
+        $blocks = [
+            ['blockName' => 'core/paragraph', 'innerHTML' => '<p>Hello world</p>', 'innerBlocks' => []],
+            ['blockName' => 'core/heading',   'innerHTML' => '<h2>Title</h2>',      'innerBlocks' => []],
+        ];
+
+        // Act
+        Functions\when('wp_strip_all_tags')->alias('strip_tags');
+        $text = GutenBot_Indexer::extract_plain_text($blocks);
+
+        // Assert
+        $this->assertStringContainsString('Hello world', $text);
+        $this->assertStringContainsString('Title', $text);
+    }
 }

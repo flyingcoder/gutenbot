@@ -184,9 +184,59 @@ class GutenBot_Admin {
             wp_die(__('Insufficient permissions.', 'gutenbot'));
         }
         check_admin_referer('gutenbot_reindex', 'gutenbot_nonce');
-        GutenBot_Indexer::run_full_index();
-        wp_redirect(add_query_arg('gutenbot_notice', 'reindexed', admin_url('admin.php?page=gutenbot-index')));
+        $total = GutenBot_Indexer::enqueue_full_index();
+        wp_redirect(add_query_arg(
+            ['gutenbot_notice' => 'queued', 'total' => $total],
+            admin_url('admin.php?page=gutenbot-index')
+        ));
         exit;
+    }
+
+    public static function handle_reset_index() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions.', 'gutenbot'));
+        }
+        check_admin_referer('gutenbot_reset_index', 'gutenbot_nonce');
+
+        global $wpdb;
+        $table = "{$wpdb->prefix}gutenbot_index_queue";
+        $wpdb->update($table, ['status' => 'failed'], ['status' => 'processing']);
+        update_option('gutenbot_index_run_id', '');
+
+        wp_redirect(admin_url('admin.php?page=gutenbot-index'));
+        exit;
+    }
+
+    public static function handle_index_progress() {
+        check_ajax_referer('gutenbot_index_progress', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('forbidden', 403);
+        }
+
+        $run_id = get_option('gutenbot_index_run_id', '');
+
+        // Drive the queue forward on each poll. WP-Cron's loopback HTTP request
+        // fails in Docker when siteurl uses the host-mapped port (e.g. :8007)
+        // which is unreachable from inside the container. Polling drives processing
+        // without relying on the loopback mechanism.
+        if ($run_id !== '') {
+            GutenBot_Index_Queue_Processor::process();
+            $run_id = get_option('gutenbot_index_run_id', '');
+        }
+
+        global $wpdb;
+        $table  = "{$wpdb->prefix}gutenbot_index_queue";
+        $total  = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+        $done   = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE status IN ('done','failed')");
+        $failed = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE status = 'failed'");
+
+        wp_send_json_success([
+            'total'   => $total,
+            'done'    => $done,
+            'failed'  => $failed,
+            'running' => $run_id !== '',
+            'pct'     => $total > 0 ? (int) round(($done / $total) * 100) : 0,
+        ]);
     }
 
     public static function handle_add_rule() {

@@ -11,16 +11,21 @@ class Test_AI_Client extends TestCase {
 
         Functions\when('get_option')->alias(function ($key, $default = '') {
             $opts = [
-                'gutenbot_ai_api_key'      => 'test-key',
-                'gutenbot_ai_api_endpoint' => 'https://api.anthropic.com/v1/messages',
-                'gutenbot_ai_model'        => 'claude-sonnet-4-6',
+                'gutenbot_ai_api_key'         => 'test-key',
+                'gutenbot_ai_api_endpoint'     => 'https://api.anthropic.com/v1/messages',
+                'gutenbot_ai_model'            => 'claude-sonnet-4-6',
+                'gutenbot_ai_provider'              => 'anthropic',
+                'gutenbot_embeddings_endpoint'      => 'https://api.openai.com/v1/embeddings',
+                'gutenbot_embeddings_model'         => 'text-embedding-3-small',
+                'gutenbot_embeddings_api_key'       => 'embed-test-key',
+                'gutenbot_ollama_endpoint'          => 'http://ollama:11434/api/chat',
+                'gutenbot_ollama_embeddings_model'  => 'nomic-embed-text',
             ];
             return $opts[$key] ?? $default;
         });
 
         Functions\when('wp_json_encode')->alias('json_encode');
         Functions\when('sanitize_text_field')->alias('trim');
-        Functions\when('GutenBot_Indexer::get_style_summary')->justReturn([]);
     }
 
     protected function tearDown(): void {
@@ -33,12 +38,14 @@ class Test_AI_Client extends TestCase {
             private $response;
             private $call_count = 0;
             public $last_payload;
+            public $last_endpoint;
 
             public function __construct($r) { $this->response = $r; }
 
             public function post($endpoint, $body) {
                 $this->call_count++;
-                $this->last_payload = $body;
+                $this->last_payload  = $body;
+                $this->last_endpoint = $endpoint;
                 return $this->response;
             }
 
@@ -131,5 +138,89 @@ class Test_AI_Client extends TestCase {
 
         // Assert
         $this->assertNull($plan);
+    }
+
+    // --- get_page_summary ---
+
+    public function test_get_page_summary_returns_page_type_and_summary() {
+        // Arrange
+        $raw    = json_encode(['page_type' => 'service', 'summary' => 'A page about fence installation.']);
+        $http   = $this->mock_http_client($raw);
+        $client = new GutenBot_AI_Client($http);
+
+        // Act
+        $result = $client->get_page_summary('Fence Installation', 'We install fences quickly.');
+
+        // Assert
+        $this->assertSame('service', $result['page_type']);
+        $this->assertSame('A page about fence installation.', $result['summary']);
+    }
+
+    public function test_get_page_summary_returns_null_on_malformed_response() {
+        // Arrange — response missing "summary" key
+        $raw    = json_encode(['page_type' => 'service']);
+        $http   = $this->mock_http_client($raw);
+        $client = new GutenBot_AI_Client($http);
+
+        // Act
+        $result = $client->get_page_summary('Test', 'content');
+
+        // Assert
+        $this->assertNull($result);
+        $this->assertNotEmpty($client->get_last_error());
+    }
+
+    // --- get_section_embedding ---
+
+    public function test_get_section_embedding_returns_float_array() {
+        // Arrange — standard OpenAI-compatible response envelope
+        $raw  = json_encode(['data' => [['embedding' => [0.1, 0.2, 0.3]]]]);
+        $http = $this->mock_http_client($raw);
+        $client = new GutenBot_AI_Client($http);
+
+        // Act
+        $vector = $client->get_section_embedding('some section text');
+
+        // Assert
+        $this->assertIsArray($vector);
+        $this->assertCount(3, $vector);
+        $this->assertEqualsWithDelta(0.1, $vector[0], 0.0001);
+    }
+
+    public function test_get_section_embedding_uses_ollama_when_provider_is_ollama() {
+        // Arrange — Ollama returns {"embedding":[...]} not OpenAI's data[0].embedding
+        Functions\when('get_option')->alias(function ($key, $default = '') {
+            $opts = [
+                'gutenbot_ai_provider'             => 'ollama',
+                'gutenbot_ollama_endpoint'         => 'http://ollama:11434/api/chat',
+                'gutenbot_ollama_embeddings_model' => 'nomic-embed-text',
+            ];
+            return $opts[$key] ?? $default;
+        });
+        $raw    = json_encode(['embedding' => [0.5, 0.6, 0.7]]);
+        $http   = $this->mock_http_client($raw);
+        $client = new GutenBot_AI_Client($http);
+
+        // Act
+        $vector = $client->get_section_embedding('hero section text');
+
+        // Assert — correct vector returned and endpoint derived from chat URL
+        $this->assertCount(3, $vector);
+        $this->assertEqualsWithDelta(0.5, $vector[0], 0.0001);
+        $this->assertStringContainsString('/api/embeddings', $http->last_endpoint ?? '');
+    }
+
+    public function test_get_section_embedding_returns_null_on_unexpected_format() {
+        // Arrange — response with no "data" key
+        $raw    = json_encode(['object' => 'error', 'message' => 'bad request']);
+        $http   = $this->mock_http_client($raw);
+        $client = new GutenBot_AI_Client($http);
+
+        // Act
+        $vector = $client->get_section_embedding('text');
+
+        // Assert
+        $this->assertNull($vector);
+        $this->assertNotEmpty($client->get_last_error());
     }
 }

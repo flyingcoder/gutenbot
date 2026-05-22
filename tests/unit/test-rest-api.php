@@ -33,18 +33,20 @@ if (!class_exists('WP_REST_Request')) {
  * Testable subclass that overrides process_content() so unit tests never
  * hit WP database, the indexer, or the AI API.
  */
-class Testable_REST_API extends GutenBot_REST_API {
-    public static $process_result    = null;
-    public static $process_exception = null;
+if (!class_exists('Testable_REST_API')) {
+    class Testable_REST_API extends GutenBot_REST_API {
+        public static $process_result    = null;
+        public static $process_exception = null;
 
-    protected static function process_content(string $content) {
-        if (static::$process_exception) {
-            throw static::$process_exception;
+        protected static function process_content(string $content) {
+            if (static::$process_exception) {
+                throw static::$process_exception;
+            }
+            if (static::$process_result === null) {
+                throw new RuntimeException('No process result configured.');
+            }
+            return static::$process_result;
         }
-        if (static::$process_result === null) {
-            throw new RuntimeException('No process result configured.');
-        }
-        return static::$process_result;
     }
 }
 

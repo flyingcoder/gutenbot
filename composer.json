@@ -14,9 +14,7 @@
     "autoload": {
         "classmap": ["includes/"]
     },
-    "autoload-dev": {
-        "classmap": ["tests/"]
-    },
+    "autoload-dev": {},
     "scripts": {
         "test": "phpunit",
         "test-unit": "phpunit --testsuite unit",

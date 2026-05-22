@@ -16,6 +16,7 @@ define('GUTENBOT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-activator.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-indexer.php';
+require_once GUTENBOT_PLUGIN_DIR . 'includes/class-index-queue-processor.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-document-processor.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-ai-client.php';
 require_once GUTENBOT_PLUGIN_DIR . 'includes/class-page-generator.php';
