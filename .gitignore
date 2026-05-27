@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.editorconfig
+
+# PHP / Composer
+vendor/
+composer.lock
+
+# PHPUnit
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+build/
+
+# Node / npm / pnpm
+node_modules/
+npm-debug.log*
+yarn-error.log
+.pnpm-debug.log*
+dist/
+*.min.js.map
+*.min.css.map
+
+# WordPress
+wp-content/uploads/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db
+Desktop.ini
