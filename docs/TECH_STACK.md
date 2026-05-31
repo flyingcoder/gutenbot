@@ -16,7 +16,7 @@ GutenBot is a three-layer system: a PHP WordPress plugin, a stateless Deno/TypeS
 | REST API | WP REST API (`rest_api_init`) | Namespace `ai-pagebuilder/v1` |
 | Settings storage | `wp_options` | All keys prefixed `aipb_` |
 | Background jobs | WP-Cron | Single events for onboarding scan |
-| Theme token reading | `theme.json` + Kadence global settings | File read + options API |
+| Theme token reading | `theme.json` | File read |
 | Sanitisation | `sanitize_text_field`, `wp_kses_*` | WP-native; all user input |
 | Escaping | `esc_html`, `esc_attr`, `esc_url` | All output |
 | Auth enforcement | `current_user_can('edit_pages')` | All REST endpoints |
@@ -40,7 +40,7 @@ GutenBot is a three-layer system: a PHP WordPress plugin, a stateless Deno/TypeS
 
 ---
 
-## Layer 3 — Edge Function (Deno / TypeScript)
+## Layer 3 — Edge Function (Deno / TypeScript) — `gutenbot-edge` repo
 
 | Concern | Technology | Notes |
 |---------|-----------|-------|
@@ -49,20 +49,20 @@ GutenBot is a three-layer system: a PHP WordPress plugin, a stateless Deno/TypeS
 | LLM — Production | Anthropic Claude Sonnet | `claude-sonnet-4-*` via REST |
 | LLM — Local dev | Ollama | `http://localhost:11434`, default model `llama3.2` |
 | LLM abstraction | `callLLM()` router function | Single entry point; no handler calls Anthropic/Ollama directly |
-| DB client | `@supabase/supabase-js` | Service role key; server-side only |
+| DB client | `@supabase/supabase-js` | Uses `SUPABASE_SECRET_KEYS` — auto-injected by Supabase platform, no manual configuration needed |
 | Auth validation | `client_id` check against `clients` table | Per-request; before any write |
-| Environment switching | `APP_ENV` env var | `production` → Anthropic; `local` → Ollama |
+| Environment switching | `aipb_local_mode` WP option or `GUTENBOT_LOCAL_MODE` wp-config constant | `false` → Anthropic; `true` → Ollama. PHP passes flag in request body. |
 
 ---
 
-## Layer 4 — Data (Supabase PostgreSQL)
+## Layer 4 — Data (Supabase PostgreSQL) — `gutenbot-edge` repo
 
 | Concern | Technology | Notes |
 |---------|-----------|-------|
 | Database | Supabase PostgreSQL 15 | Managed, shared across all client sites |
 | Vector extension | `pgvector` | `vector(1536)` column on `block_patterns`; not populated in v1 |
 | Data isolation | Row-Level Security (RLS) | Per-client policies on all tables |
-| Admin access | Supabase service role key | Edge Function only; bypasses RLS for agency admin reads |
+| Admin access | `SUPABASE_SECRET_KEYS` (auto-injected) | Edge Function only; bypasses RLS for agency admin reads |
 | Tables | `clients`, `pages`, `sections`, `block_patterns`, `generation_logs` | See ARCHITECTURE.md |
 
 ---
@@ -71,7 +71,7 @@ GutenBot is a three-layer system: a PHP WordPress plugin, a stateless Deno/TypeS
 
 | Concern | Technology | Notes |
 |---------|-----------|-------|
-| Hosting (Edge Function) | Supabase | Deployed as Supabase Edge Function |
+| Hosting (Edge Function) | Supabase | Deployed as Supabase Edge Function — lives in a separate `gutenbot-edge` repository |
 | Local WordPress | Docker Compose | `wp-experiments` container; `http://localhost:8007` |
 | Local MySQL | External Docker network | `mysql.local:3306`, db `wp_experiments` |
 | Local LLM | Ollama | Dev/test only; no API cost |
@@ -103,10 +103,14 @@ Browser / WP Admin
 WordPress REST API  ──── no LLM keys here
        │  HTTPS + client_id
        ▼
-Supabase Edge Function  ──── ANTHROPIC_API_KEY, SUPABASE_SERVICE_KEY (env vars only)
+Supabase Edge Function  ──── ANTHROPIC_API_KEY (manual secret)
+       │                  ──── SUPABASE_URL, SUPABASE_SECRET_KEYS (auto-injected by Supabase)
+       │                  ──── OLLAMA_BASE_URL, OLLAMA_MODEL (manual; dev only)
        │
        ├── Anthropic Claude API (production)
        └── Ollama (local dev)
 ```
 
-API credentials never leave the Edge Function environment.
+`ANTHROPIC_API_KEY` is the only credential requiring manual configuration.
+`SUPABASE_SECRET_KEYS` and `SUPABASE_URL` are automatically available in every Supabase Edge Function — no manual setup needed.
+API credentials never appear in WordPress or the plugin repository.

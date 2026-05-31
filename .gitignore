@@ -34,11 +34,6 @@ dist/
 wp-content/uploads/
 *.log
 
-# Environment
-.env
-.env.local
-.env.*.local
-
 # OS
 Thumbs.db
 Desktop.ini

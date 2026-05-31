@@ -1,0 +1,12 @@
+{
+    "name": "gutenbot",
+    "version": "1.0.0",
+    "description": "AI-powered Gutenberg sidebar for page generation",
+    "scripts": {
+        "build": "wp-scripts build src/index.js src/admin.js --output-path=assets",
+        "start": "wp-scripts start src/index.js src/admin.js --output-path=assets"
+    },
+    "devDependencies": {
+        "@wordpress/scripts": "^27.0"
+    }
+}

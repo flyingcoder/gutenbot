@@ -95,32 +95,34 @@ The agency team lead who sets up the plugin on client sites and monitors status.
 
 ---
 
-### US-06 — Enter the Edge Function URL
+### US-06 — Configure connection settings
 
 **As an** agency admin,
-**I want to** enter the Supabase Edge Function URL in the plugin settings page,
-**so that** the plugin knows where to send generation requests.
+**I want to** enter the Edge Function URL, Anon Key, and LLM Provider in the plugin settings page,
+**so that** the plugin can sync scan data to Supabase and trigger AI generation.
 
 **Acceptance criteria:**
 - A settings page exists under Settings > AI Page Builder.
-- The page shows a text field for the Edge Function URL.
-- Saving the URL triggers an automatic rescan within 5 seconds (onboarding resets to `pending` then runs).
-- An info notice appears on activation if the URL has not been set.
+- The page shows fields for Edge Function URL, Anon Key, and LLM Provider.
+- Saving these settings resets `aipb_sync_status` to `pending` — it does **not** trigger an automatic rescan.
+- The "Sync to Supabase" button is hidden until all three connection fields are saved.
+- An info notice appears on activation if a site scan has not yet been run.
 
 **Maps to:** FR-18, FR-08, FR-19, FR-03, AC-02, AC-10
 
 ---
 
-### US-07 — Monitor onboarding status
+### US-07 — Monitor scan and sync status independently
 
 **As an** agency admin,
-**I want to** see the current onboarding status and last scan timestamp on the settings page,
-**so that** I know whether a client site is ready for content generation.
+**I want to** see separate status indicators for the site scan and the Supabase sync on the settings page,
+**so that** I can tell at a glance whether data has been scanned locally and whether it has been pushed to Supabase.
 
 **Acceptance criteria:**
-- The settings page displays: client UUID, onboarding status (`pending_settings`, `pending`, `complete`, `error`), and last-scanned timestamp.
-- A persistent error notice is shown if onboarding failed, including the error message.
-- A one-time success notice is shown after onboarding completes, then suppressed.
+- The settings page shows a **Site Scan** section with its own status badge (`pending`, `complete`, `error`) and last-scanned timestamp.
+- The settings page shows a **Supabase Sync** section with its own status badge (`pending`, `pending_settings`, `complete`, `error`), last-synced timestamp, and Client UUID.
+- Errors are shown inline within the relevant section — no separate notice banners required.
+- Scan status and sync status can differ (e.g. scan complete but sync pending).
 
 **Maps to:** FR-18, FR-19, FR-20, AC-09
 
@@ -130,12 +132,13 @@ The agency team lead who sets up the plugin on client sites and monitors status.
 
 **As an** agency admin,
 **I want** plugin activation to be non-blocking,
-**so that** the WordPress admin remains responsive during onboarding.
+**so that** the WordPress admin remains responsive while the plugin sets up.
 
 **Acceptance criteria:**
-- Activation schedules a WP-Cron event (+5 seconds) rather than running synchronously.
-- The activation hook does not make any outbound HTTP requests.
-- If no Edge Function URL is configured, status is set to `pending_settings` and no HTTP calls are made.
+- Activation creates the `{prefix}_gutenbot_indexed_posts` table via `dbDelta()` — safe and idempotent.
+- Activation schedules an `aipb_site_scan` WP-Cron event (+5 seconds) rather than running synchronously.
+- The activation hook makes **no outbound HTTP requests** — the scan runs locally, the sync is always user-initiated.
+- The site scan runs without any connection settings being present.
 
 **Maps to:** FR-02, FR-03, AC-02
 
@@ -169,7 +172,7 @@ An engineer building or maintaining the plugin and Edge Function.
 **so that** I can test generation without incurring Anthropic API costs.
 
 **Acceptance criteria:**
-- Setting `APP_ENV=local` and `OLLAMA_BASE_URL` routes all LLM calls to Ollama.
+- Enabling the "Local / Dev Mode" checkbox on the settings page (or defining `GUTENBOT_LOCAL_MODE` in `wp-config.php`) routes all LLM calls to Ollama via `OLLAMA_BASE_URL`.
 - No requests are made to `api.anthropic.com` in local mode.
 - The full generate flow (content analysis + block generation) completes successfully against a local model.
 
@@ -206,18 +209,19 @@ An engineer building or maintaining the plugin and Edge Function.
 
 ---
 
-### US-13 — Scan a Kadence-based site and build its block registry
+### US-13 — Block scanner targets core and theme blocks only (MVP)
 
 **As a** developer,
-**I want** the block scanner to correctly index Kadence Blocks in addition to core blocks,
-**so that** pattern selection leverages the site's actual page builder.
+**I want** the block scanner to index only WordPress core blocks and the active theme's custom blocks,
+**so that** the MVP ships with a predictable, well-defined scope and is not broken by third-party block libraries installed on client sites.
 
 **Acceptance criteria:**
-- After onboarding a Kadence-based site, `block_registry` in the `clients` row contains entries with `kadence/*` block names.
-- `block_patterns` includes patterns for `kadence/rowlayout` or equivalent if they appear 2 or more times.
-- Design token extraction reads Kadence global palette settings as a fallback when `theme.json` is absent.
+- The scanner records blocks whose `blockName` begins with `core/` or matches the active theme's registered block namespace.
+- Blocks from third-party libraries (e.g. `kadence/`, `generateblocks/`, `stackable/`) are silently skipped during the scan — they are not recorded in `aipb_block_registry`.
+- Generation still succeeds on sites that have third-party blocks installed, using the core-block fallback for any unrecognised section type.
+- No error or admin notice is shown due to skipped third-party blocks.
 
-**Maps to:** FR-04, FR-05, FR-06, AC-11
+**Maps to:** MVP scope decision; AC-12
 
 ---
 
@@ -235,11 +239,67 @@ An engineer building or maintaining the plugin and Edge Function.
 
 ---
 
+---
+
+### US-15 — Run a site scan without connection settings
+
+**As an** agency admin,
+**I want to** scan the site's blocks and page patterns immediately after activation,
+**so that** local scan data is ready before I have configured Supabase credentials.
+
+**Acceptance criteria:**
+- The "Scan Site" button on the settings page is always enabled regardless of whether connection settings are saved.
+- Clicking Scan Site triggers `aipb_site_scan`, runs `Indexer::scan_incremental()`, and redirects back with a success or error notice.
+- `aipb_scan_status` reaches `complete` on a site with no Edge Function URL configured.
+- No outbound HTTP requests are made during the scan.
+
+**Maps to:** Group 1 separation from INDEXING_REFACTOR_PLAN.md
+
+---
+
+### US-16 — Sync to Supabase without a page reload
+
+**As an** agency admin,
+**I want to** push scan data to Supabase by clicking a button that responds inline,
+**so that** I get immediate feedback without waiting for a full page reload.
+
+**Acceptance criteria:**
+- Clicking "Sync to Supabase" sends a jQuery AJAX request to `admin-ajax.php`.
+- The button shows "Syncing…" and is disabled while the request is in flight.
+- On success: the status badge updates to "Complete" and the last-synced timestamp appears — no page reload.
+- On failure: an inline error message appears — no page reload.
+- The button is re-enabled after success or failure.
+- The sync button is only shown when Edge Function URL, Anon Key, and Provider are all saved.
+
+**Maps to:** Group 2 separation from INDEXING_REFACTOR_PLAN.md
+
+---
+
+### US-17 — Rescan only changed pages
+
+**As an** agency admin,
+**I want** subsequent site scans to reprocess only pages that have changed since the last scan,
+**so that** scanning a large site after a minor content update completes quickly.
+
+**Acceptance criteria:**
+- The scanner queries `{prefix}_gutenbot_indexed_posts` and compares each post's `post_modified_gmt` against `scanned_at`.
+- Posts where `post_modified_gmt ≤ scanned_at` are skipped entirely.
+- Only new posts or posts modified since the last scan are re-parsed.
+- Rows for deleted or unpublished posts are removed from the table.
+- The aggregated `wp_options` keys (`aipb_block_registry`, `aipb_design_tokens`, `aipb_patterns`) are rebuilt from the full table after every scan, regardless of how many posts were changed.
+- `aipb_scan_status` is set to `complete` and `aipb_scanned_at` is updated after every successful incremental scan.
+
+**Maps to:** Change 1 from INDEXING_REFACTOR_PLAN.md
+
+---
+
 ## Story Map Summary
 
 | Theme | Stories |
 |-------|---------|
 | Content Generation | US-01, US-02, US-05 |
 | Quality Feedback | US-03, US-04 |
-| Onboarding & Settings | US-06, US-07, US-08, US-09 |
+| Settings & Configuration | US-06, US-07, US-09 |
+| Activation & Onboarding | US-08, US-15, US-17 |
+| Supabase Sync | US-16 |
 | Developer / Ops | US-10, US-11, US-12, US-13, US-14 |
